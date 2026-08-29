@@ -50,10 +50,6 @@ raster scans  ->  construction kernels  ->  transmission and beam-broadening map
 | absorption | *μt* | −ln *T* |
 | beam broadening | *B* | (σ/*I*_c) / (σ₀/*I*_c,₀) |
 
-The notebook stops at the SAXS/WAXS profiles. Quantitative WAXS peak analysis, method
-animations and the publication figure layouts are deliberately not included: they are not
-needed to follow or reproduce the mapping procedure.
-
 ## The data
 
 The raw experiment is about **4.2 GB**: 5593 detector frames of 407 × 487 float32 pixels
