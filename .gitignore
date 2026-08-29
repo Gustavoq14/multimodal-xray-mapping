@@ -1,0 +1,10 @@
+# Raw experimental data is kept outside the repository (see README).
+EveLor_*/
+GusEveROIs_*/
+*.edf
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/

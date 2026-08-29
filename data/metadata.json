@@ -1,0 +1,94 @@
+{
+  "description": "Reduced dataset for the multimodal X-ray mapping notebook (PHBV + BG 4%). Derived from the raw EDF frames by tools/make_reduced_dataset.py.",
+  "instrument": {
+    "name": "Xenocs Xeuss 2.0",
+    "detector": "PILATUS3 200K, S/N 2-0315",
+    "detector_shape": [
+      407,
+      487
+    ],
+    "pixel_size_m": 0.000172,
+    "wavelength_m": 1.54189e-10,
+    "collimation": "UHR"
+  },
+  "scan": {
+    "sample_detector_distance_m": 6.4,
+    "exposure_time_s": 1.0,
+    "motor_step_mm": 0.039,
+    "blocks": [
+      1024,
+      1024
+    ],
+    "n_points": 2048,
+    "window_px": 60,
+    "reference_pixel_col_row": [
+      242,
+      308
+    ],
+    "reference_pixel_source": "round(Center_1), round(Center_2) from the EDF header",
+    "source_folder": "EveLor_20260515",
+    "source_frames": [
+      201,
+      2249
+    ]
+  },
+  "direct_beam": {
+    "n_frames": 100,
+    "window_px": 80,
+    "centroid_full_frame_col_row": [
+      241.61351881769636,
+      308.63992455699463
+    ],
+    "reference_pixel_col_row": [
+      241,
+      308
+    ],
+    "reference_pixel_source": "int() of the mean centroid over the full frames",
+    "source_folder": "EveLor_20260515",
+    "source_frames": [
+      1,
+      101
+    ]
+  },
+  "saxs": {
+    "sample_detector_distance_m": 1.18765,
+    "exposure_time_s": 2400.0,
+    "beam_centre_col_row": [
+      32.67,
+      388.25
+    ],
+    "pixel_size_m": 0.000172,
+    "wavelength_m": 1.54189e-10,
+    "detector": "Pilatus200k",
+    "source_folder": "GusEveROIs_20260518",
+    "source_files": [
+      "GusEveROIs_20260518_0_00007.edf",
+      "GusEveROIs_20260518_0_00008.edf",
+      "GusEveROIs_20260518_0_00009.edf"
+    ]
+  },
+  "waxs": {
+    "source_folder": "GusEveROIs_20260518",
+    "source_file": "Resul2T.txt",
+    "source_columns_zero_based": [
+      3,
+      4,
+      5
+    ],
+    "note": "azimuthally integrated in Foxtrot; 2theta in degrees"
+  },
+  "roi_motor_coordinates_mm": {
+    "ROI1": {
+      "x": 38.221,
+      "z": -35.208
+    },
+    "ROI2": {
+      "x": 37.831,
+      "z": -34.993
+    },
+    "ROI3": {
+      "x": 38.377,
+      "z": -34.623
+    }
+  }
+}
