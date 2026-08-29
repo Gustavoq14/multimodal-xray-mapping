@@ -98,6 +98,40 @@ python tools/make_reduced_dataset.py /path/to/raw_data -o data
 
 The raw frames are kept outside this repository and are available from the authors.
 
+## The method, step by step
+
+The animations below illustrate the three computational steps of the method. They were
+produced with the animation routines of the full analysis notebook (not included here,
+since they are not needed to reproduce the maps).
+
+> **Note.** These animations show the **PLA + SBA-15 4 wt %** sample, the other system
+> studied in the article, whose larger scan (2025 points per raster) makes the mechanism
+> easier to follow. The notebook in this repository processes the PHBV + BG 4 % sample,
+> so the maps it produces look different — the procedure is identical.
+
+**1. Building the transmission map, kernel by kernel.** Each scan point contributes a
+7 × 7 construction kernel, deposited on the common grid at the motor position where it was
+acquired. Neighbouring kernels overlap, so each map pixel accumulates several
+contributions and is divided by its coverage *N*(**p**) (right panel). The map is finally
+cropped to the region where *N* = 49, the only one with complete coverage.
+
+![Transmission map construction](assets/Transmission_map.gif)
+
+**2. Building the beam-broadening map, point by point.** Here each scan point yields a
+single scalar instead of a kernel: the radial second moment σ of the transmitted beam
+divided by the intensity at its centroid *I*<sub>c</sub>, both measured on the analysis
+window (right panel, with σ drawn as the dashed circle).
+
+![Beam-broadening map construction](assets/Beam_broadening_map.gif)
+
+**3. Sub-pixel recombination by drizzle.** The two interlaced scans, offset by half a motor
+step, are deposited on a grid of half the step. Each input pixel is shrunk to `pixfrac`
+= 0.6 of its size before being dropped, which is what turns the half-step offset into
+distinct output positions instead of an average. The right panel shows the accumulated
+weight converging to a uniform *w* = 0.72.
+
+![Drizzle recombination](assets/Drizzle_map.gif)
+
 ## Citation
 
 If you use this code, please cite the article above.
