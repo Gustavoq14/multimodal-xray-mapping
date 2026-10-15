@@ -1,6 +1,6 @@
-[![DOI](https://zenodo.org/badge/1350749272.svg)](https://doi.org/10.5281/zenodo.23382695)
-
 # Multimodal X-ray mapping from the transmitted beam
+
+[![DOI](https://zenodo.org/badge/1350749272.svg)](https://doi.org/10.5281/zenodo.23382695)
 
 Reference implementation of the mapping workflow described in
 
