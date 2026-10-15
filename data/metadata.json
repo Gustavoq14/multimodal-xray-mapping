@@ -20,7 +20,7 @@
       1024
     ],
     "n_points": 2048,
-    "window_px": 60,
+    "window_px": 150,
     "reference_pixel_col_row": [
       242,
       308
@@ -44,6 +44,12 @@
       308
     ],
     "reference_pixel_source": "int() of the mean centroid over the full frames",
+    "tail_window_px": 150,
+    "tail_window_reference_pixel_col_row": [
+      242,
+      308
+    ],
+    "tail_window_reference_pixel_source": "same pixel as the scan windows",
     "source_folder": "EveLor_20260515",
     "source_frames": [
       1,

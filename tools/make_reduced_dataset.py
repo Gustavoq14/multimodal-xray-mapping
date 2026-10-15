@@ -3,20 +3,23 @@
 The raw experiment is ~4.2 GB of EDF frames (5597 detector images of 407x487
 float32 pixels) and cannot be hosted on GitHub. This script extracts, from those
 raw frames, the *only* information the mapping pipeline actually consumes, and
-writes it to `data/` (~12 MB).
+writes it to `data/`.
 
 What the pipeline reads from each raw frame
 -------------------------------------------
 * Transmission map : a 7x7 construction kernel centred on the beam position.
 * Beam-broadening  : the central 20x20 region of a 60x60 analysis window,
                      also centred on the beam position.
+* Tail scattering  : the whole 150x150 window centred on the beam position;
+                     the excess intensity is summed in the tails of the beam,
+                     up to the corners of that window.
 * Bookkeeping      : the motor coordinates (x, z) and the exposure time.
 
-Nothing else in the 407x487 frame is used. We therefore store the 60x60 window
-(a superset of both, and the window quoted in the paper) plus the motor
-coordinates. Extracting a kernel of size s from the stored 60x60 window with
-`extract_kernel(window, 30, 30, s)` returns exactly the same pixels as
-extracting it from the full frame, so the maps are bit-identical.
+Nothing else in the 407x487 frame is used. We therefore store the 150x150 window
+(a superset of the three) plus the motor coordinates. Extracting a kernel of
+size s from the stored window with `extract_kernel(window, 75, 75, s)` returns
+exactly the same pixels as extracting it from the full frame, so the maps are
+bit-identical.
 
 Beam centre convention (important)
 ----------------------------------
@@ -29,6 +32,11 @@ and the reduced dataset preserves both:
                   frame. The centroid cannot be recomputed from a crop (the
                   asymmetric background outside the crop shifts it by ~0.9 px
                   in z), so the precomputed value is stored in metadata.json.
+
+The tail-scattering metric compares each scan window with the direct beam pixel
+by pixel, so for that metric the direct-beam frames are ALSO cropped around the
+scan reference pixel (`tail_windows` in direct_beam.npz): both images then
+cover exactly the same detector pixels.
 
 Usage
 -----
@@ -53,8 +61,9 @@ BEAM_SLICE = (1, 101)          # direct-beam frames used for I0 and B0
 SCAN_START = 201               # first frame of the raster scan
 BLOCKS = (1024, 1024)          # two interlaced scans of 1024 points each
 
-WIN_SCAN = 60                  # beam-broadening analysis window (px)
-WIN_BEAM = 80                  # direct-beam window kept for illustration (px)
+WIN_SCAN = 150                 # stored scan window (px): kernel, B and tails
+WIN_BEAM = 80                  # direct-beam window for I0, B0 and Fig. 1 (px)
+WIN_TAILS = 150                # direct-beam window on the scan pixels (px)
 
 SAXS_FILES = ["GusEveROIs_20260518_0_00007.edf",     # ROI1
               "GusEveROIs_20260518_0_00008.edf",     # ROI2
@@ -98,8 +107,17 @@ def centroid(image):
 def window(image, col, row, size):
     """`size`x`size` window centred on the pixel (row, col)."""
     half = size // 2
+    if (row - half < 0 or col - half < 0 or row - half + size > image.shape[0]
+            or col - half + size > image.shape[1]):
+        raise ValueError(f"{size}x{size} window at ({col}, {row}) leaves the detector")
     return np.array(image[row - half:row - half + size,
                           col - half:col - half + size], dtype=np.float32)
+
+
+def scan_reference_pixel(header):
+    """Reference pixel (col, row) of a scan frame: rounded beam centre of the header."""
+    return (int(round(float(header["Center_1"]))),
+            int(round(float(header["Center_2"]))))
 
 
 # --------------------------------------------------------------------------
@@ -110,6 +128,11 @@ def main(raw_root, out_dir):
     files = sorted(f for f in os.listdir(scan_dir) if f.endswith(".edf"))
     print(f"{len(files)} raw frames in {FOLDER_SCAN}")
 
+    n_scan = sum(BLOCKS)
+    scan_files = files[SCAN_START:SCAN_START + n_scan]
+    assert len(scan_files) == n_scan, "not enough scan frames"
+    ref_scan = scan_reference_pixel(read_edf(os.path.join(scan_dir, scan_files[0]))[1])
+
     # ---------------- direct beam: centroid on the full frames --------------
     beam_files = files[BEAM_SLICE[0]:BEAM_SLICE[1]]
     cen = np.array([centroid(read_edf(os.path.join(scan_dir, f))[0])
@@ -119,35 +142,30 @@ def main(raw_root, out_dir):
     print(f"direct-beam centroid over {len(beam_files)} full frames: "
           f"cx={cx_mean:.4f} cy={cy_mean:.4f} -> reference pixel {ref_beam}")
 
-    beam_stack, beam_exposure = [], []
+    beam_stack, tail_stack, beam_exposure = [], [], []
     for f in beam_files:
         data, h = read_edf(os.path.join(scan_dir, f))
         beam_stack.append(window(data, ref_beam[0], ref_beam[1], WIN_BEAM))
+        tail_stack.append(window(data, ref_scan[0], ref_scan[1], WIN_TAILS))
         beam_exposure.append(float(h["ExposureTime"]))
     beam_stack = np.stack(beam_stack)
+    tail_stack = np.stack(tail_stack)
 
     np.savez_compressed(os.path.join(out_dir, "direct_beam.npz"),
                         windows=beam_stack,
+                        tail_windows=tail_stack,
                         exposure=np.array(beam_exposure, np.float32),
                         centroid_full_frame=cen.astype(np.float64))
-    print(f"  direct_beam.npz  {beam_stack.shape}")
+    print(f"  direct_beam.npz  windows {beam_stack.shape}, "
+          f"tail_windows {tail_stack.shape} at the scan pixel {ref_scan}")
 
-    # ---------------- raster scan: 60x60 window per scan point --------------
-    n_scan = sum(BLOCKS)
-    scan_files = files[SCAN_START:SCAN_START + n_scan]
-    assert len(scan_files) == n_scan, "not enough scan frames"
-
+    # ---------------- raster scan: 150x150 window per scan point ------------
     windows, positions, exposure = [], [], []
-    ref_scan = None
     for f in scan_files:
         data, h = read_edf(os.path.join(scan_dir, f))
-        col = int(round(float(h["Center_1"])))
-        row = int(round(float(h["Center_2"])))
-        if ref_scan is None:
-            ref_scan = (col, row)
-        elif (col, row) != ref_scan:
+        if scan_reference_pixel(h) != ref_scan:
             raise ValueError(f"beam centre moves during the scan: {f}")
-        windows.append(window(data, col, row, WIN_SCAN))
+        windows.append(window(data, ref_scan[0], ref_scan[1], WIN_SCAN))
         positions.append((float(h["x"]), float(h["z"])))
         exposure.append(float(h["ExposureTime"]))
     windows = np.stack(windows)
@@ -211,6 +229,9 @@ def main(raw_root, out_dir):
             "centroid_full_frame_col_row": [float(cx_mean), float(cy_mean)],
             "reference_pixel_col_row": list(ref_beam),
             "reference_pixel_source": "int() of the mean centroid over the full frames",
+            "tail_window_px": WIN_TAILS,
+            "tail_window_reference_pixel_col_row": list(ref_scan),
+            "tail_window_reference_pixel_source": "same pixel as the scan windows",
             "source_folder": FOLDER_SCAN,
             "source_frames": list(BEAM_SLICE),
         },

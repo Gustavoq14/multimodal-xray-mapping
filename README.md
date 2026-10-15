@@ -22,7 +22,7 @@ The notebook covers the **PHBV + Bioglass 4 wt %** system.
 
 ```
 multimodal_mapping_PHBV_BG4.ipynb   the workflow, from the scan data to the SAXS/WAXS profiles
-data/                               reduced dataset (~11 MB), enough to run the notebook
+data/                               reduced dataset (~22 MB), enough to run the notebook
 tools/make_reduced_dataset.py       how data/ was derived from the raw detector frames
 requirements.txt                    Python dependencies
 ```
@@ -35,14 +35,16 @@ jupyter lab multimodal_mapping_PHBV_BG4.ipynb
 ```
 
 Everything the notebook needs is in this repository; no access to the raw experimental data
-is required. It runs end to end in a few seconds.
+is required. It runs end to end in less than a minute.
 
 ## What the notebook does
 
 ```
-raster scans  ->  construction kernels  ->  transmission and beam-broadening maps
+raster scans  ->  construction kernels  ->  transmission, beam-broadening and
+                                            tail-scattering maps
               ->  drizzle (sub-pixel recombination)
-              ->  transmission T, absorption mu*t, beam broadening B
+              ->  transmission T, absorption mu*t, beam broadening B,
+                  tail scattering eta
               ->  ROI selection on B  ->  localized SAXS / WAXS profiles
 ```
 
@@ -53,29 +55,31 @@ raster scans  ->  construction kernels  ->  transmission and beam-broadening map
 | beam broadening | *B* | (σ/*I*_c) / (σ₀/*I*_c,₀) |
 | tail scattering | *η* | Σ<sub>tails</sub> (*I* − *T*<sub>n</sub>*I*₀) / Σ<sub>core</sub> *T*<sub>n</sub>*I*₀ |
 
-The fourth map, *η*, is part of the full analysis (see step 3 below) but is **not computed
-by the notebook in this repository**: it needs a 150 × 150 px window around the beam, while
-the reduced dataset stores 60 × 60 px windows (see *The data*).
+The notebook computes the four maps. *η* is evaluated on a 150 × 150 px window around the
+beam, with the tails restricted to the pixels outside the 0.05–0.95 quantile box where the
+direct beam is below 5 % of its maximum (`TAIL_I0_THRESHOLD`); for this sample any threshold
+up to 10 % gives no negative values, and the notebook shows that check.
 
 ## The data
 
 The raw experiment is about **4.2 GB**: 5593 detector frames of 407 × 487 float32 pixels
 for the raster scans, plus the localized SAXS/WAXS acquisitions. That is impractical to
-host here, so this repository ships a **reduced dataset of ~11 MB** in `data/`.
+host here, so this repository ships a **reduced dataset of ~22 MB** in `data/`.
 
 The reduction is not arbitrary. Of each 407 × 487 detector frame the pipeline only ever
-reads a small window centred on the beam: a 7 × 7 construction kernel for the transmission
-map, and the central 20 × 20 region of the analysis window for the beam-broadening map.
-`data/` therefore stores the 60 × 60 window quoted in the article — a superset of both —
-together with the motor coordinates and exposure times. Cropping a kernel from the stored
+reads a window centred on the beam: a 7 × 7 construction kernel for the transmission map,
+the central 20 × 20 region of the 60 × 60 analysis window for the beam-broadening map, and a
+150 × 150 window for the tail-scattering map. `data/` therefore stores the 150 × 150 window —
+a superset of the three — together with the motor coordinates and exposure times.
+Cropping a kernel from the stored
 window is the same arithmetic as cropping it from the full frame, so **the maps built from
 the reduced dataset are bit-identical to those built from the raw frames** (verified
 against the full dataset).
 
 | file | contents |
 |---|---|
-| `scan_windows.npz` | `windows` (2048, 60, 60) detector windows, one per scan point; `positions` (2048, 2) motor coordinates (x, z) in mm; `exposure` (2048,) in s; `blocks` the two interlaced scans |
-| `direct_beam.npz` | `windows` (100, 80, 80) direct-beam windows; `exposure`; `centroid_full_frame` (100, 2) per-frame centroids computed on the full frames |
+| `scan_windows.npz` | `windows` (2048, 150, 150) detector windows, one per scan point; `positions` (2048, 2) motor coordinates (x, z) in mm; `exposure` (2048,) in s; `blocks` the two interlaced scans |
+| `direct_beam.npz` | `windows` (100, 80, 80) direct-beam windows; `tail_windows` (100, 150, 150) the same frames cropped on the detector pixels of the scan windows; `exposure`; `centroid_full_frame` (100, 2) per-frame centroids computed on the full frames |
 | `saxs_rois.npz` | `frames` (3, 407, 487) 2D SAXS patterns measured at ROI1–ROI3 |
 | `waxs_rois.csv` | azimuthally integrated WAXS profiles at ROI1–ROI3 (2θ in degrees) |
 | `metadata.json` | instrument, scan, direct-beam, SAXS and WAXS parameters, and the measured ROI motor coordinates |
@@ -88,6 +92,12 @@ because the asymmetric background outside the crop contributes to the full-frame
 precomputed per-frame centroids are therefore stored in `direct_beam.npz`, and the windows
 were cropped around the corresponding reference pixel so that every kernel extraction
 downstream is exact. The notebook shows this comparison explicitly.
+
+The tail-scattering map compares each scan image with the direct beam pixel by pixel, so
+both must cover the same detector pixels. The scan windows are centred one column away from
+the direct-beam reference pixel, so the direct-beam frames are stored a second time, cropped
+on the scan pixels (`tail_windows`). *I*₀ and *B*₀ keep using the original crop, so the
+transmission and beam-broadening maps are unchanged.
 
 ### Regenerating `data/` from the raw frames
 
