@@ -10,9 +10,11 @@ The method turns a commercial laboratory SAXS/WAXS instrument (Xenocs Xeuss 2.0)
 two-dimensional mapping system without any instrumental modification. It uses the intrinsic
 divergence of the beam as a geometric magnifier, and recombines two interlaced raster scans
 with the *drizzle* algorithm to reach a sampling step of 19.5 µm. From a single acquisition
-the same transmitted-beam images yield three complementary maps — transmission, absorption
-and beam broadening — the last of which is used to locate heterogeneities and to place the
-regions of interest (ROIs) at which localized SAXS/WAXS is subsequently measured.
+the same transmitted-beam images yield four complementary maps — transmission, absorption,
+beam broadening and tail scattering. The beam-broadening map is used to locate
+heterogeneities and to place the regions of interest (ROIs) at which localized SAXS/WAXS is
+subsequently measured; the tail-scattering map confirms, before any localized measurement,
+that those regions scatter more than their surroundings.
 
 The notebook covers the **PHBV + Bioglass 4 wt %** system.
 
@@ -49,6 +51,11 @@ raster scans  ->  construction kernels  ->  transmission and beam-broadening map
 | transmission | *T* | *I* / *I*₀ |
 | absorption | *μt* | −ln *T* |
 | beam broadening | *B* | (σ/*I*_c) / (σ₀/*I*_c,₀) |
+| tail scattering | *η* | Σ<sub>tails</sub> (*I* − *T*<sub>n</sub>*I*₀) / Σ<sub>core</sub> *T*<sub>n</sub>*I*₀ |
+
+The fourth map, *η*, is part of the full analysis (see step 3 below) but is **not computed
+by the notebook in this repository**: it needs a 150 × 150 px window around the beam, while
+the reduced dataset stores 60 × 60 px windows (see *The data*).
 
 ## The data
 
@@ -96,37 +103,111 @@ The raw frames are kept outside this repository and are available from the autho
 
 ## The method, step by step
 
-The animations below illustrate the three computational steps of the method. They were
-produced with the animation routines of the full analysis notebook (not included here,
-since they are not needed to reproduce the maps).
+The animations and figures below illustrate the full workflow, from the raster scan to the
+localized SAXS/WAXS measurements. They were produced with the animation and figure routines
+of the full analysis notebook (not included here, since they are not needed to reproduce
+the maps).
 
-> **Note.** These animations show the **PLA + SBA-15 4 wt %** sample, the other system
+> **Note.** This section follows the **PLA + SBA-15 4 wt %** sample, the other system
 > studied in the article, whose larger scan (2025 points per raster) makes the mechanism
 > easier to follow. The notebook in this repository processes the PHBV + BG 4 % sample,
 > so the maps it produces look different — the procedure is identical.
 
-**1. Building the transmission map, kernel by kernel.** Each scan point contributes a
-7 × 7 construction kernel, deposited on the common grid at the motor position where it was
-acquired. Neighbouring kernels overlap, so each map pixel accumulates several
-contributions and is divided by its coverage *N*(**p**) (right panel). The map is finally
-cropped to the region where *N* = 49, the only one with complete coverage.
+### 1. Transmission map, kernel by kernel
+
+Each scan point contributes a 7 × 7 construction kernel, deposited on the common grid at
+the motor position where it was acquired. Neighbouring kernels overlap, so each map pixel
+accumulates several contributions and is divided by its coverage *N*(**p**) (right panel).
+The map is finally cropped to the region where *N* = 49, the only one with complete
+coverage. Normalizing by the direct-beam intensity gives *T* = *I*/*I*₀, and the absorption
+map follows as *μt* = −ln *T*.
 
 ![Transmission map construction](assets/Transmission_map.gif)
 
-**2. Building the beam-broadening map, point by point.** Here each scan point yields a
-single scalar instead of a kernel: the radial second moment σ of the transmitted beam
-divided by the intensity at its centroid *I*<sub>c</sub>, both measured on the analysis
-window (right panel, with σ drawn as the dashed circle).
+### 2. Beam-broadening map, point by point
+
+Here each scan point yields a single scalar instead of a kernel: the radial second moment σ
+of the transmitted beam divided by the intensity at its centroid *I*<sub>c</sub>, both
+measured on the analysis window (right panel, with σ drawn as the dashed circle), and
+normalized by the same quantity for the direct beam. *B* combines the angular broadening of
+the beam with the loss of central intensity, and is the map used to locate heterogeneities.
 
 ![Beam-broadening map construction](assets/Beam_broadening_map.gif)
 
-**3. Sub-pixel recombination by drizzle.** The two interlaced scans, offset by half a motor
-step, are deposited on a grid of half the step. Each input pixel is shrunk to `pixfrac`
-= 0.6 of its size before being dropped, which is what turns the half-step offset into
-distinct output positions instead of an average. The right panel shows the accumulated
-weight converging to a uniform *w* = 0.72.
+### 3. Tail-scattering map, point by point
+
+The transmitted image contains two contributions: photons that cross the sample undeviated,
+which keep the profile of the incident beam attenuated by absorption, and photons scattered
+at ultra-small angles, which spread into the tails of the beam. At each scan point:
+
+1. the transmission *T*<sub>n</sub> is fitted in the **core** of the beam (central region
+   between the 0.25 and 0.75 quantiles of the direct-beam projections), where scattering
+   is negligible;
+2. *T*<sub>n</sub> *I*₀ gives the image that would be recorded if the sample only absorbed;
+3. the excess of the measured image over this reference is summed over the **tails**
+   (outside the 0.05–0.95 quantiles and where the direct beam is below 5 % of its maximum)
+   and normalized by the transmitted intensity in the core.
+
+*η* is therefore the intensity scattered into the tails per unit of transmitted intensity:
+*η* = 0 for a purely absorbing sample. In the animation, the left panel shows the *η* map
+being filled, the centre panel the radial profile of the measured beam against the
+absorption-only reference (the violet area is the excess summed by *η*), and the right
+panel the transmitted beam with the core (cyan box) and the tails (violet region). Because
+each value integrates the scattering of the whole illuminated region, features appear
+broadened by about the beam footprint on the sample (0.24 × 0.28 mm).
+
+![Tail-scattering map construction](assets/Tail_scattering_map.gif)
+
+### 4. Sub-pixel recombination by drizzle
+
+The two interlaced scans, offset by half a motor step, are deposited on a grid of half the
+step. Each input pixel is shrunk to `pixfrac` = 0.6 of its size before being dropped, which
+is what turns the half-step offset into distinct output positions instead of an average.
+The right panel shows the accumulated weight converging to a uniform *w* = 0.72. The same
+recombination is applied to the transmission, beam-broadening and tail-scattering maps.
 
 ![Drizzle recombination](assets/Drizzle_map.gif)
+
+### 5. The four multimodal maps
+
+After drizzle, every map covers 1.52 × 1.52 mm with a sampling step of 19.5 µm.
+Transmission (a) and absorption (b) describe the projected optical thickness and reveal
+the diagonal raster pattern of the 3D-printed part. Beam broadening (c) shows the same
+pattern plus a localized heterogeneity of ~0.2 mm with sharply defined contours. Tail
+scattering (d) is dominated by that heterogeneity, which reaches 3.4 times the matrix level,
+while the raster pattern persists only as a weak modulation; the heterogeneity appears
+larger than in *B* because *η* integrates the scattering of the whole beam footprint.
+
+![Multimodal maps, PLA + SBA-15](assets/Fig_paper_T_muT_B_eta_PLA_SBA15.png)
+
+### 6. Localized SAXS at the regions of interest
+
+Four ROIs are placed on the *B* map: ROI1 on its maximum, located automatically, and
+ROI2–ROI4 on the base structure as references for the matrix. Each ROI has the size of the
+beam footprint (0.24 × 0.28 mm). Their physical coordinates are recovered from the map grid
+and used to reposition the motorized sample stage (precision < 5 µm), where SAXS is
+measured at 1.2 m for 2400 s per ROI.
+
+ROI2–ROI4 show practically identical profiles, with the (100) correlation peak of the
+hexagonal *p6mm* mesostructure of SBA-15 at *q*<sub>100</sub> ≈ 0.654 nm⁻¹
+(*d*<sub>100</sub> ≈ 9.6 nm). In ROI1 the integrated area of the (100) peak is 2.4(6) times
+that of the matrix, with no change in its position or width, and the intensity rises
+steeply at low *q* (5.2 times the matrix at *q* = 0.11 nm⁻¹). The heterogeneity located on
+the *B* map is therefore a compact agglomerate of SBA-15 particles, with its mesostructure
+unaltered.
+
+![ROIs and SAXS profiles, PLA + SBA-15](assets/Fig_ROIs_SAXS_PLA_SBA15_4pct.png)
+
+The sequence closes the mapping–localization–characterization loop on a single laboratory
+instrument: *B* indicates where to measure, *η* confirms that the contrast is due to
+scattering, and the localized SAXS/WAXS measurements determine its structural nature.
+
+## License
+
+The code in this repository is released under the [MIT License](LICENSE). The reduced
+dataset in `data/` is released under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): you are free to reuse it,
+provided you cite the article below.
 
 ## Citation
 
